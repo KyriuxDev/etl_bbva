@@ -1,0 +1,17 @@
+# Credenciales — NUNCA subir
+.env
+
+# Entorno virtual
+venv/
+
+# CSVs extraídos (datos reales)
+datos_extraidos/
+
+# Logs de ejecución
+*.log
+
+# Archivos de Python
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
