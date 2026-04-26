@@ -1,68 +1,140 @@
-# ETL — Guía
+# ETL BBVA — Fase de Extracción
 
-## Primeros pasos (solo la primera vez)
+Extrae datos de **dos fuentes** y los guarda como archivos CSV listos para la fase de transformación.
 
-### 1. Clona o descarga el proyecto
-Asegúrate de tener todos estos archivos en la misma carpeta:
-```
-extraccion_etl.py
-setup.py
-requirements.txt
-.env.example
-README.md
-```
-
-### 2. Configura tus credenciales
-Copia el archivo de ejemplo y edítalo:
-```
-# Windows
-copy .env.example .env
-
-# Mac / Linux
-cp .env.example .env
-```
-Abre `.env` y rellena con los datos reales de conexión:
-```
-DB_HOST=<ip o hostname del servidor>
-DB_PORT=5432
-DB_NAME=<nombre de la base de datos>
-DB_USER=<tu usuario>
-DB_PASSWORD=<tu contraseña>
-```
-
-### 3. Ejecuta el setup (instala todo automáticamente)
-```
-# Windows
-python setup.py
-
-# Mac / Linux
-python3 setup.py
-```
-Esto crea el entorno virtual e instala las dependencias. Solo se hace una vez.
+| Fuente | Descripción | Registros |
+|--------|-------------|-----------|
+| PostgreSQL `bbva_v2` | 15 tablas del sistema bancario BBVA | ~2,041,495 filas |
+| CSV externo (Banxico) | Tipo de cambio MXN/USD diario 2022–2024 | 754 registros |
 
 ---
 
-## Correr el ETL
+## Requisitos
+
+- Python 3.8+
+- Acceso al contenedor PostgreSQL con la base `bbva_v2`
+- El archivo `tipo_cambio_banxico.csv` ya viene incluido en el repositorio
+
+---
+
+## Configuración inicial (solo la primera vez)
+
+### 1. Clona el repositorio
+
+```bash
+git clone https://github.com/KyriuxDev/etl_bbva.git
+cd etl_bbva
+```
+
+### 2. Ejecuta el setup
+
+Crea el entorno virtual e instala las dependencias automáticamente:
+
+```bash
+# Mac / Linux
+python3 setup.py
+
+# Windows
+python setup.py
+```
+
+### 3. Configura las credenciales de la base de datos
+
+```bash
+# Mac / Linux
+cp .env.example .env
+
+# Windows
+copy .env.example .env
+```
+
+Abre el archivo `.env` y rellena con los datos de conexión a PostgreSQL:
 
 ```
-# Windows
-venv\Scripts\python extraccion_etl.py
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=bbva_v2
+DB_USER=<tu_usuario>
+DB_PASSWORD=<tu_contraseña>
+ETL_OUTPUT_DIR=datos_extraidos
+```
 
+---
+
+## Ejecutar la extracción
+
+```bash
 # Mac / Linux
 venv/bin/python extraccion_etl.py
+
+# Windows
+venv\Scripts\python extraccion_etl.py
 ```
 
-Los CSVs extraídos quedarán en la carpeta `datos_extraidos/`.
+El script extrae las dos fuentes en secuencia:
+
+1. **Fuente 1 — PostgreSQL**: conecta a `bbva_v2` y exporta las 15 tablas
+2. **Fuente 2 — CSV externo**: lee `tipo_cambio_banxico.csv` (Banco de México), normaliza fechas y tipos, y lo guarda junto a los demás
+
+Al finalizar verás un resumen como este:
+
+```
+  Tablas extraídas : 16 / 15
+  Total de filas   : 2,042,249
+  Duración         : ~30s
+  EXTRACCIÓN COMPLETADA
+```
+
+---
+
+## Archivos generados
+
+Todos los CSV quedan en la carpeta `datos_extraidos/`:
+
+```
+datos_extraidos/
+├── clientes.csv
+├── cuentas.csv
+├── transacciones.csv
+├── pagos.csv
+├── cobros.csv
+├── prestamos.csv
+├── financiaciones.csv
+├── seguros.csv
+├── tarjetas.csv
+├── metas_ahorro.csv
+├── notificaciones.csv
+├── datos_personales.csv
+├── datos_negocio.csv
+├── open_data.csv
+├── auditoria_comisiones.csv
+└── tipo_cambio_banxico.csv   ← fuente externa Banxico
+```
 
 ---
 
 ## Estructura del proyecto
+
 ```
-├── extraccion_etl.py     # Script principal de extracción
-├── setup.py              # Configuración automática del entorno
-├── requirements.txt      # Dependencias de Python
-├── .env.example          # Plantilla de configuración
-├── .env                  # Tus credenciales (NO subir a git)
-├── datos_extraidos/      # CSVs generados (se crea automáticamente)
-└── README.md             # Este archivo
+etl_bbva/
+├── extraccion_etl.py        # Script principal de extracción (2 fuentes)
+├── tipo_cambio_banxico.csv  # Fuente externa: tipo de cambio Banxico 2022-2024
+├── setup.py                 # Configuración automática del entorno
+├── requirements.txt         # Dependencias de Python
+├── .env.example             # Plantilla de configuración
+├── .env                     # Tus credenciales (NO se sube a git)
+├── datos_extraidos/         # CSVs generados (se crea automáticamente)
+└── README.md
 ```
+
+---
+
+## Sobre el CSV externo (Banxico)
+
+El archivo `tipo_cambio_banxico.csv` contiene la **serie histórica diaria del tipo de cambio peso-dólar (CF373)** descargada del Sistema de Información Económica (SIE) del Banco de México.
+
+- Período: `2022-01-03` al `2024-12-31`
+- Columnas: `fecha`, `tipo_cambio_mxn_usd`, `fuente`
+- Fuente oficial: [banxico.org.mx — SIE CF373](https://www.banxico.org.mx/SieInternet/consultarDirectorioInternetAction.do?sector=6&accion=consultarCuadro&idCuadro=CF373&locale=es)
+
+Se usa en la fase de transformación para calcular el equivalente en USD de cada transacción fraudulenta.

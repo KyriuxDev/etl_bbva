@@ -1,8 +1,11 @@
 """
 ETL - FASE DE EXTRACCIÓN
 ========================
-Extrae todas las tablas de la base de datos PostgreSQL
-y las guarda como archivos CSV listos para la fase de transformación.
+Fuente 1: Extrae todas las tablas de la base de datos PostgreSQL (bbva_v2)
+           y las guarda como archivos CSV listos para la fase de transformación.
+
+Fuente 2: Lee el CSV externo del Banco de México (tipo de cambio MXN/USD)
+           y lo normaliza para cruzarlo con las transacciones.
 
 Dependencias:
     pip install sqlalchemy psycopg2-binary pandas python-dotenv
@@ -31,6 +34,9 @@ DB_CONFIG = {
 
 # Carpeta donde se guardarán los CSVs extraídos
 OUTPUT_DIR = os.getenv("ETL_OUTPUT_DIR", "datos_extraidos")
+
+# Ruta del CSV externo de Banxico
+BANXICO_CSV = os.getenv("BANXICO_CSV", "tipo_cambio_banxico.csv")
 
 # Tablas a extraer — en orden respetando dependencias (clientes primero)
 TABLAS = [
@@ -141,13 +147,20 @@ def ejecutar_extraccion():
         log.critical(f"No se pudo conectar a la BD: {e}")
         return
 
-    # Extraer cada tabla
+    # ── Fuente 1: PostgreSQL ──────────────────────────
     resumen = []
     for tabla in TABLAS:
         res = extraer_tabla(engine, tabla, OUTPUT_DIR)
         resumen.append(res)
 
     engine.dispose()
+
+    # ── Fuente 2: CSV externo Banxico ─────────────────
+    log.info("─" * 55)
+    log.info("  FUENTE EXTERNA — Banco de México (tipo de cambio)")
+    log.info("─" * 55)
+    res_banxico = extraer_banxico(OUTPUT_DIR)
+    resumen.append(res_banxico)
 
     # ── Resumen final ──────────────────────────────
     fin = datetime.now()
@@ -172,6 +185,50 @@ def ejecutar_extraccion():
     log.info("=" * 55)
 
     return resumen
+
+
+# ─────────────────────────────────────────────
+# EXTRACCIÓN FUENTE 2 — CSV EXTERNO (BANXICO)
+# ─────────────────────────────────────────────
+
+def extraer_banxico(output_dir: str) -> dict:
+    """
+    Lee el CSV del tipo de cambio MXN/USD de Banco de México,
+    normaliza columnas y lo guarda en la carpeta de extracción.
+    """
+    resultado = {"tabla": "tipo_cambio_banxico", "filas": 0, "archivo": None, "estatus": "error"}
+
+    try:
+        log.info("  → Extrayendo fuente externa: tipo_cambio_banxico.csv (Banxico)")
+
+        if not os.path.exists(BANXICO_CSV):
+            raise FileNotFoundError(f"No se encontró el archivo: {BANXICO_CSV}")
+
+        df = pd.read_csv(
+            BANXICO_CSV,
+            skiprows=18,
+            header=0,
+            encoding="latin-1",
+            names=["fecha", "tipo_cambio_mxn_usd"],
+        )
+        df = df.dropna()
+        df["fecha"] = pd.to_datetime(df["fecha"], format="%d/%m/%Y", errors="coerce")
+        df["tipo_cambio_mxn_usd"] = pd.to_numeric(df["tipo_cambio_mxn_usd"], errors="coerce")
+        df = df.dropna().sort_values("fecha").reset_index(drop=True)
+        df["fuente"] = "Banco de México — SIE CF373"
+
+        ruta_csv = os.path.join(output_dir, "tipo_cambio_banxico.csv")
+        df.to_csv(ruta_csv, index=False, encoding="utf-8", date_format="%Y-%m-%d")
+
+        resultado["filas"]   = len(df)
+        resultado["archivo"] = ruta_csv
+        resultado["estatus"] = "ok"
+        log.info(f"  {len(df):,} filas → {ruta_csv}")
+
+    except Exception as e:
+        log.error(f"  Error en fuente externa Banxico: {e}")
+
+    return resultado
 
 
 # ─────────────────────────────────────────────
