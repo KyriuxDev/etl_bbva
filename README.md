@@ -138,3 +138,35 @@ El archivo `tipo_cambio_banxico.csv` contiene la **serie histórica diaria del t
 - Fuente oficial: [banxico.org.mx — SIE CF373](https://www.banxico.org.mx/SieInternet/consultarDirectorioInternetAction.do?sector=6&accion=consultarCuadro&idCuadro=CF373&locale=es)
 
 Se usa en la fase de transformación para calcular el equivalente en USD de cada transacción fraudulenta.
+
+---
+
+## Fase de Transformación
+
+> **Ejecutar después de** `extraccion_etl.py`. Requiere que la carpeta `datos_extraidos/` ya exista con los CSVs generados.
+
+```bash
+# Mac / Linux
+venv/bin/python transformacion_etl.py
+
+# Windows
+venv\Scripts\python transformacion_etl.py
+```
+
+Lee las tablas `clientes`, `cuentas`, `transacciones` y `tipo_cambio_banxico` desde `datos_extraidos/`, aplica enriquecimiento y genera 5 datasets analíticos de fraude en `datos_transformados/`:
+
+```
+datos_transformados/
+├── alertas_fraude.csv          # ~20,321 alertas con datos de cliente, cuenta y monto en USD
+├── fraude_por_categoria.csv    # Fraudes agrupados por categoría de comercio (10 categorías)
+├── fraude_por_canal.csv        # Fraudes por canal de pago (5 canales) con porcentaje
+├── fraude_por_mes.csv          # Tendencia mensual 2022–2024 (36 meses)
+└── resumen_general.csv         # KPIs: total transacciones, tasa de fraude, montos MXN y USD
+```
+
+Al finalizar verás:
+
+```
+  TRANSFORMACIÓN COMPLETADA
+  Duración: ~Xs
+```
