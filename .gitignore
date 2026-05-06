@@ -6,6 +6,7 @@ venv/
 
 # CSVs extraídos (datos reales)
 datos_extraidos/
+datos_transformados/
 
 # Logs de ejecución
 *.log
